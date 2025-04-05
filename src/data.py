@@ -42,7 +42,6 @@ class DataLoader:
 class SimpleEncoding:
     """
     This class is an example of dataset encoding.
-
     """
 
     def __init__(
