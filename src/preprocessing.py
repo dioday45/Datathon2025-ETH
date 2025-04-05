@@ -37,11 +37,33 @@ class PreProcessClass(ABC):
 
             return last_nan_indices - first_nan_indices, first_nan_indices
 
-        customer_ts = self.x[[id, "spv", "temp"]].dropna(subset=[id])
+        # def interpolate_data(
+        #     ts: pd.Series,
+        #     length_nan: list,
+        #     start_nan: list,
+        #     th: float = 7 * 24,
+        #     window=pd.Timedelta(hours=3),
+        # ):
+        # for i, t in enumerate(start_nan):
+
+        #     print(length_nan[i])
+        #     if length_nan[i] < th:
+        #         start = t - window
+        #         end = t + window
+        #         ts_window = ts[start:end]
+        #         ts_interpolated = ts_window.interpolate("linear")
+        #         ts[start:end] = ts_interpolated
+        #     else:
+        #         # fit model and predict
+        #         pass
+
+        customer_ts = self.x[[id, "spv", "temp"]]  # .dropna(subset=[id])
         customer_ts = drop_before(customer_ts)
         length_nan, start_nan = find_nan_streaks(customer_ts[id])
-        print(length_nan)
-        print(start_nan)
+        # print(length_nan)
+        # print(start_nan)
+
+        # customer_ts = interpolate_data(customer_ts, length_nan, start_nan)
         customer_ts = customer_ts.rename(columns={id: "Consumption"})
 
         if not pd.api.types.is_datetime64_any_dtype(customer_ts.index):
