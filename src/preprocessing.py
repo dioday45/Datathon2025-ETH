@@ -1,3 +1,5 @@
+import pickle
+import re
 from abc import ABC
 
 import holidays
@@ -11,6 +13,12 @@ class PreProcessClass(ABC):
         features.index = pd.to_datetime(features.index)
         features = features[~features.index.duplicated(keep="first")]
         self.x = pd.concat([x, features], axis=1, join="inner")
+
+        model_path = "model.pkl"
+
+        # Load the model
+        with open(model_path, "rb") as f:
+            self.model = pickle.load(f)
 
     def preprocess_nonan(self, id: str) -> pd.DataFrame:
         """
@@ -35,6 +43,8 @@ class PreProcessClass(ABC):
         first_idx = customer_ts["Consumption"].first_valid_index()
         customer_ts = customer_ts.loc[first_idx:]
         customer_ts.index = pd.to_datetime(customer_ts.index)
+
+        customer_ts = self.preprocess(customer_ts, id)
 
         # Add additional features
         customer_ts["Hour"] = customer_ts.index.hour.astype(int)
@@ -72,13 +82,28 @@ class PreProcessClass(ABC):
 
         return customer_ts
 
-    def preprocess(self, x: pd.DataFrame) -> pd.DataFrame:
+    def preprocess(self, x: pd.DataFrame, id) -> pd.DataFrame:
         """data cleaning + imputation + standardization etc."""
-        # fill na
 
-        # features
-        pass
+        # Path to your model file
+        temporary_df = x.copy()
+        id_short = re.search(r"(IT|ES)_\d+", id).group()
+        temporary_df["number"] = id_short
+        temporary_df["hour"] = temporary_df.index.hour
+        temporary_df["day_of_week"] = temporary_df.index.dayofweek
+        temporary_df["month"] = temporary_df.index.month
+        temporary_df["year"] = temporary_df.index.year
 
-    # @abstractmethod
-    # def feature_engineering(self, x: pd.DataFrame) -> pd.DataFrame:
-    #     pass
+        temporary_df = temporary_df[["number", "hour", "day_of_week", "month", "year"]]
+
+        temporary_df.number = temporary_df.number.astype("category")
+
+        prediction = self.model.predict(
+            temporary_df, num_iteration=self.model.best_iteration
+        )
+
+        x.loc[x["Consumption"].isna(), "Consumption"] = prediction[
+            x["Consumption"].isna()
+        ]
+
+        return x
