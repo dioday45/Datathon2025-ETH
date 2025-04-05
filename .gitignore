@@ -173,3 +173,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 notebooks/sandbox.ipynb
+
+
+#Data
+datasets2025/*
