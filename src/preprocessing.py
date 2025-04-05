@@ -8,9 +8,10 @@ class PreProcessClass(ABC):
     def __init__(self):
         pass
 
-    def preprocess(self, x: pd.DataFrame):
+    def preprocess(self, x: pd.DataFrame) -> pd.DataFrame:
+        """data cleaning + imputation + standardization etc."""
         pass
 
     @abstractmethod
-    def feature_engineering(self, x: pd.DataFrame):
+    def feature_engineering(self, x: pd.DataFrame) -> pd.DataFrame:
         pass
