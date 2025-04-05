@@ -25,9 +25,23 @@ class PreProcessClass(ABC):
         if id not in self.x.columns:
             raise ValueError(f"Customer ID '{id}' not found in the dataset.")
 
+        def drop_before(ts: pd.Series):
+            first_nan = ts.first_valid_index()
+            return ts[first_nan:]
+
+        def find_nan_streaks(ts: pd.Series):
+            nan_streak_starts = ts.isna() & ~ts.isna().shift(fill_value=False)
+            nan_streak_ends = ts.isna() & ~ts.isna().shift(-1, fill_value=False)
+            first_nan_indices = ts.index[nan_streak_starts]
+            last_nan_indices = ts.index[nan_streak_ends]
+
+            return last_nan_indices - first_nan_indices, first_nan_indices
+
         customer_ts = self.x[[id, "spv", "temp"]].dropna(subset=[id])
         customer_ts = drop_before(customer_ts)
-        length_nan, start_nan = find_nan_streaks(customer_ts)
+        length_nan, start_nan = find_nan_streaks(customer_ts[id])
+        print(length_nan)
+        print(start_nan)
         customer_ts = customer_ts.rename(columns={id: "Consumption"})
 
         if not pd.api.types.is_datetime64_any_dtype(customer_ts.index):
