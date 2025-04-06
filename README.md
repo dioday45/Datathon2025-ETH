@@ -26,6 +26,7 @@ The chosen model for both imputation and forecasting was **LightGBM**, a gradien
 ## Repository Structure
 
 - `README.md`: Contains the project overview and setup instructions.
+- `datathon2025_quAIntly.ppxt`: PowerPoint presentation of the project
 - `configs/`: Configuration files related to the project.
 - `datasets2025/`: Contains data files for various regions (e.g., Italy, Spain), including historical metering data, holiday data, and forecasts.
 - `environmentAlpiqDatathon.yml`: The environment setup file for the project dependencies.
@@ -35,6 +36,17 @@ The chosen model for both imputation and forecasting was **LightGBM**, a gradien
 - `scripts/`: Python scripts for data processing, forecasting, and scoring.
 - `setup.py`: Setup script for packaging the project.
 - `src/`: Contains the core Python code for data processing, feature engineering, model training, and evaluation.
+
+## How-to
+How to use this repo? First, install the dependencies by:
+```
+conda create -f environmentAlpiqDatathon.yml
+pre-commit install
+```
+The dataset needs to be in the root. Then, load the data with the `DataLoader` class and pass the observations in the `Preprocess` class. Call the `preprocess` function that preprocesses the data (mainly data imputation with the General Model, whose weights are zipped in the root -and need to be unzipped).<br>
+The main notebook, `per_consumer_modeling.ipynb`, contains the preceding, with a feature analysis and modeling predictions.
+
+The notebook `model_for_imputation`contains... the model fitting for imputing the missing data.
 
 ## Acknowledgments
 
