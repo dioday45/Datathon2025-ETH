@@ -3,7 +3,9 @@ import re
 from abc import ABC
 
 import holidays
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 class PreProcessClass(ABC):
@@ -12,8 +14,8 @@ class PreProcessClass(ABC):
 
         features.index = pd.to_datetime(features.index)
         features = features[~features.index.duplicated(keep="first")]
-        self.x = pd.concat([x, features], axis=1, join="inner")
-
+        self.x = pd.concat([x, features], axis=1, join="outer")
+        self.x = self.x[self.x.index < pd.to_datetime("2024-09-01")]
         model_path = "model.pkl"
 
         # Load the model
@@ -25,23 +27,27 @@ class PreProcessClass(ABC):
         Extracts and cleans the time series for the given customer ID.
         """
 
-        if id not in self.x.columns:
-            raise ValueError(f"Customer ID '{id}' not found in the dataset.")
+        for i in id:
+            if i not in self.x.columns:
+                raise ValueError(f"Customer ID '{i}' not found in the dataset.")
 
-        if "ES" in id:
-            # Use Spanish holidays
-            country_holidays = holidays.country_holidays("ES")
-        elif "IT" in id:
-            # Use Italian holidays
-            country_holidays = holidays.country_holidays("IT")
-        else:
-            # Default to Spanish holidays if the country is not recognized
-            raise ValueError(f"Country not recognized for ID '{id}'")
+        if len(id) == 1:
+            if "ES" in id:
+                # Use Spanish holidays
+                country_holidays = holidays.country_holidays("ES")
+            elif "IT" in id:
+                # Use Italian holidays
+                country_holidays = holidays.country_holidays("IT")
+            else:
+                # Default to Spanish holidays if the country is not recognized
+                raise ValueError(f"Country not recognized for ID '{id}'")
 
-        customer_ts = self.x[[id, "spv", "temp"]]
-        customer_ts = customer_ts.rename(columns={id: "Consumption"})
-        first_idx = customer_ts["Consumption"].first_valid_index()
-        customer_ts = customer_ts.loc[first_idx:]
+        customer_ts = self.x[id + ["spv"] + ["temp"]]
+        if len(id) == 1:
+            customer_ts = customer_ts.rename(columns={id: "Consumption"})
+            first_idx = customer_ts["Consumption"].first_valid_index()
+            customer_ts = customer_ts.loc[first_idx:]
+
         customer_ts.index = pd.to_datetime(customer_ts.index)
 
         customer_ts = self.preprocess(customer_ts, id)
@@ -53,9 +59,23 @@ class PreProcessClass(ABC):
         customer_ts["Year"] = customer_ts.index.year.astype(int)
         customer_ts["Dow"] = customer_ts.index.day_of_week.astype(int)
         customer_ts["IsWeekend"] = (customer_ts.index.weekday >= 5).astype(int)
-        customer_ts["is_holiday"] = [
-            int(d in country_holidays) for d in customer_ts.index.normalize().date
-        ]
+        if len(id) == 1:
+            customer_ts["is_holiday"] = [
+                int(d in country_holidays) for d in customer_ts.index.normalize().date
+            ]
+        customer_ts["hour_sin"] = np.sin(2 * np.pi * customer_ts["Hour"] / 24)
+        customer_ts["hour_cos"] = np.cos(2 * np.pi * customer_ts["Hour"] / 24)
+
+        customer_ts["dow_sin"] = np.sin(2 * np.pi * customer_ts["Dow"] / 7)
+        customer_ts["dow_cos"] = np.cos(2 * np.pi * customer_ts["Dow"] / 7)
+
+        customer_ts["month_sin"] = np.sin(2 * np.pi * customer_ts["Month"] / 12)
+        customer_ts["month_cos"] = np.cos(2 * np.pi * customer_ts["Month"] / 12)
+
+        if len(id) == 1:
+            customer_ts = customer_ts.drop(
+                columns=["Hour", "Day", "Month", "Year", "Dow"]
+            )
 
         # # Create special_weekend feature
         # customer_ts["IsWeekendSpecial"] = 0
@@ -70,15 +90,10 @@ class PreProcessClass(ABC):
         # ] = 1
 
         # Create active_day feature
-        customer_ts["ActiveDay"] = 0
-        customer_ts.loc[
-            (customer_ts["Hour"] >= 6) & (customer_ts["Hour"] <= 20), "ActiveDay"
-        ] = 1
-
-        customer_ts["Consumption"] = customer_ts["Consumption"].clip(
-            lower=customer_ts["Consumption"].quantile(0.01),
-            upper=customer_ts["Consumption"].quantile(0.99),
-        )
+        # customer_ts["ActiveDay"] = 0
+        # customer_ts.loc[
+        #     (customer_ts["Hour"] >= 6) & (customer_ts["Hour"] <= 20), "ActiveDay"
+        # ] = 1
 
         return customer_ts
 
@@ -87,23 +102,45 @@ class PreProcessClass(ABC):
 
         # Path to your model file
         temporary_df = x.copy()
-        id_short = re.search(r"(IT|ES)_\d+", id).group()
-        temporary_df["number"] = id_short
         temporary_df["hour"] = temporary_df.index.hour
         temporary_df["day_of_week"] = temporary_df.index.dayofweek
         temporary_df["month"] = temporary_df.index.month
         temporary_df["year"] = temporary_df.index.year
 
-        temporary_df = temporary_df[["number", "hour", "day_of_week", "month", "year"]]
+        for consumer in tqdm(x.columns, desc="Processing consumers"):
+            # print(consumer)
+            pattern = r"(IT|ES)_\d+"
 
-        temporary_df.number = temporary_df.number.astype("category")
+            if not re.search(pattern, consumer):
+                continue
+            id_short = re.search(r"(IT|ES)_\d+", consumer).group()
+            temporary_df["number"] = id_short
 
-        prediction = self.model.predict(
-            temporary_df, num_iteration=self.model.best_iteration
-        )
+            temporary_df = temporary_df[
+                ["number", "hour", "day_of_week", "month", "year"]
+            ]
 
-        x.loc[x["Consumption"].isna(), "Consumption"] = prediction[
-            x["Consumption"].isna()
-        ]
+            temporary_df.number = temporary_df.number.astype("category")
+
+            # Filter for rows where consumption data is missing
+            missing_mask = x[consumer].isna()
+
+            # Only proceed if there are missing values for the consumer
+            if missing_mask.any():
+                # Prepare a temporary DataFrame for prediction on missing values
+                prediction_df = temporary_df[missing_mask][
+                    ["number", "hour", "day_of_week", "month", "year"]
+                ]
+
+                # Perform prediction only on the rows where consumption is missing
+                prediction = self.model.predict(
+                    prediction_df, num_iteration=self.model.best_iteration
+                )
+
+                # Update the original DataFrame with the predicted values
+                if len(id) == 1:
+                    x.loc[x["Consumption"].isna(), "Consumption"] = prediction
+                else:
+                    x.loc[missing_mask, consumer] = prediction
 
         return x
