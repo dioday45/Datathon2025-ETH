@@ -170,3 +170,67 @@ class PreProcessClass(ABC):
                 x.loc[missing_mask, consumer] = prediction
 
         return x
+
+    def preprocess_EDA(self, id: list[str]) -> pd.DataFrame:
+                """
+                Extracts and cleans the time series for the given customer ID.
+                """
+
+                for i in id:
+                    if i not in self.x.columns:
+                        raise ValueError(f"Customer ID '{i}' not found in the dataset.")
+
+                customer_ts = self.x[id + ["spv"] + ["temp"]]
+                customer_ts.index = pd.to_datetime(customer_ts.index)
+
+                # Add additional features
+                customer_ts["Hour"] = customer_ts.index.hour
+                customer_ts["Day"] = customer_ts.index.day   
+                customer_ts["Month"] = customer_ts.index.month
+                customer_ts["Year"] = customer_ts.index.year
+                customer_ts['Dow'] = customer_ts.index.day_name()
+                customer_ts["DayYear"] = customer_ts.index.dayofyear
+                customer_ts["Week"] = customer_ts.index.isocalendar().week
+                customer_ts["Season"] = customer_ts.index.quarter
+                customer_ts["IsWeekend"] = customer_ts.index.weekday >= 5
+
+                # Create special_weekend feature
+                customer_ts["IsWeekendSpecial"] = False
+                customer_ts.loc[(customer_ts["Dow"] == "Saturday") & (customer_ts["Hour"] >= 20), "IsWeekendSpecial"] = True
+                customer_ts.loc[(customer_ts["Dow"] == "Sunday"), "IsWeekendSpecial"] = True
+                customer_ts.loc[(customer_ts["Dow"] == "Monday") & (customer_ts["Hour"] <= 6), "IsWeekendSpecial"] = True
+
+                # Create active_day feature
+                customer_ts["ActiveDay"] = False
+                customer_ts.loc[(customer_ts["Hour"] >= 6) & (customer_ts["Hour"] <= 20), "ActiveDay"] = True
+                
+                # Rename season
+                season_map = {
+                    1: "Winter",
+                    2: "Spring",
+                    3: "Summer",
+                    4: "Autumn"
+                }
+                
+                customer_ts["Season"] = customer_ts["Season"].map(season_map)
+
+                list_to_cat = [
+                    "Hour",
+                    "Day",
+                    "Month",
+                    "Year",
+                    "Dow",
+                    "DayYear",
+                    "Week",
+                    "Season"
+                ]
+
+                list_to_bool = [
+                    "IsWeekendSpecial",
+                    "ActiveDay"
+                ]
+
+                customer_ts[list_to_cat] = customer_ts[list_to_cat].astype("category")
+                customer_ts[list_to_bool] = customer_ts[list_to_bool].astype("bool")
+
+                return customer_ts
