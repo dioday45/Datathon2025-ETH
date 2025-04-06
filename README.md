@@ -3,7 +3,7 @@
 
 ## Project Overview
 
-This project focuses on predicting hourly electricity demand for thousands of consumers from Italy and France. During the Hackathon 2025 with Alpiq, the team implemented a baseline model that predicted demand based on the mean for a given day of the week and hour, using data from the previous month. Although the baseline model performed with a test set loss of **323k** for July 2024, more sophisticated models were developed to improve accuracy.
+This project focuses on predicting hourly electricity demand for thousands of consumers from Italy and Spain. During the 2025 Alpiq Hackathon 2025 the teams had implemented a baseline predictive model of energy demand based on the mean for a given day of the week and hour, using data from the previous month. Although the baseline model performed with a test set loss of **323k** for July 2024, more sophisticated models were developed to improve accuracy.
 
 ## Developed Models
 
