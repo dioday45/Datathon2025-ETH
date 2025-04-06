@@ -5,7 +5,6 @@ from abc import ABC
 import holidays
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 
 class PreProcessClass(ABC):
@@ -32,10 +31,10 @@ class PreProcessClass(ABC):
                 raise ValueError(f"Customer ID '{i}' not found in the dataset.")
 
         if len(id) == 1:
-            if "ES" in id:
+            if "ES" in id[0]:
                 # Use Spanish holidays
                 country_holidays = holidays.country_holidays("ES")
-            elif "IT" in id:
+            elif "IT" in id[0]:
                 # Use Italian holidays
                 country_holidays = holidays.country_holidays("IT")
             else:
@@ -44,7 +43,7 @@ class PreProcessClass(ABC):
 
         customer_ts = self.x[id + ["spv"] + ["temp"]]
         if len(id) == 1:
-            customer_ts = customer_ts.rename(columns={id: "Consumption"})
+            customer_ts = customer_ts.rename(columns={id[0]: "Consumption"})
             first_idx = customer_ts["Consumption"].first_valid_index()
             customer_ts = customer_ts.loc[first_idx:]
 
@@ -107,7 +106,38 @@ class PreProcessClass(ABC):
         temporary_df["month"] = temporary_df.index.month
         temporary_df["year"] = temporary_df.index.year
 
-        for consumer in tqdm(x.columns, desc="Processing consumers"):
+        if len(id) == 1:
+            pattern = r"(IT|ES)_\d+"
+
+            id_short = re.search(r"(IT|ES)_\d+", id[0]).group()
+            temporary_df["number"] = id_short
+
+            temporary_df = temporary_df[
+                ["number", "hour", "day_of_week", "month", "year"]
+            ]
+
+            temporary_df.number = temporary_df.number.astype("category")
+
+            # Filter for rows where consumption data is missing
+            missing_mask = x["Consumption"].isna()
+
+            # Only proceed if there are missing values for the consumer
+            if missing_mask.any():
+                # Prepare a temporary DataFrame for prediction on missing values
+                prediction_df = temporary_df[missing_mask][
+                    ["number", "hour", "day_of_week", "month", "year"]
+                ]
+
+                # Perform prediction only on the rows where consumption is missing
+                prediction = self.model.predict(
+                    prediction_df, num_iteration=self.model.best_iteration
+                )
+
+                # Update the original DataFrame with the predicted values
+                x.loc[x["Consumption"].isna(), "Consumption"] = prediction
+            return x
+
+        for consumer in x.columns:
             # print(consumer)
             pattern = r"(IT|ES)_\d+"
 
@@ -137,10 +167,6 @@ class PreProcessClass(ABC):
                     prediction_df, num_iteration=self.model.best_iteration
                 )
 
-                # Update the original DataFrame with the predicted values
-                if len(id) == 1:
-                    x.loc[x["Consumption"].isna(), "Consumption"] = prediction
-                else:
-                    x.loc[missing_mask, consumer] = prediction
+                x.loc[missing_mask, consumer] = prediction
 
         return x
