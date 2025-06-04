@@ -25,7 +25,7 @@ From there, we iteratively improved our approach, exploring more advanced modeli
 
 Open and run the notebook:
 
-📓 [`per_consumer_modeling.ipynb`](.notebooks/per_consumer_modeling.ipynb)
+📓 [`per_consumer_modeling.ipynb`](./notebooks/per_consumer_modeling.ipynb)
 
 This notebook walks through:
 
